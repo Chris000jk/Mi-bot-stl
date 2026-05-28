@@ -70,6 +70,24 @@ async def verificar(update, context):
     await query.edit_message_text(f"🎉 *¡PAGO CONFIRMADO!*\n\n📥 Descarga: {prod['archivo_url']}", parse_mode="Markdown", disable_web_page_preview=True)
     context.user_data.clear()
 
+# Líneas para que Render no se queje por falta de puerto
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running!')
+
+def run_webserver():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    server.serve_forever()
+
+# Iniciar el servidor web en un hilo separado
+Thread(target=run_webserver, daemon=True).start()
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
