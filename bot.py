@@ -10,15 +10,11 @@ CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 PRODUCTOS = {
-    "brazo": {
-        "nombre": "🦾 Brazo Robótico",
-        "precio": 25.0,
-        "archivo_url": "https://drive.google.com/uc?export=download&id=REEMPLAZA_CON_TU_ID"
-    },
-    "carro": {
-        "nombre": "🚗 Carro RC",
-        "precio": 15.0,
-        "archivo_url": "https://drive.google.com/uc?export=download&id=REEMPLAZA_CON_TU_ID"
+    "rueda": {
+        "nombre": "🏍️ Rueda de Moto",
+        "precio": 10.0,
+        "foto": "https://drive.google.com/uc?export=download&id=1OceXb1_I85OP2r0iAYfQGplk2ArTiIuT",
+        "archivo_url": "https://drive.google.com/uc?export=download&id=1F6ygJKkBBdWSwubZzWcnnZcompdrJYxV"
     }
 }
 
