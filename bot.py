@@ -12,16 +12,8 @@ CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY")
 CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
-# ========== CATÁLOGO DE PRODUCTOS ==========
-# Cada producto tiene: nombre, precio, foto, descripcion, archivo_url
+# ========== PRODUCTO: RUEDA ==========
 PRODUCTOS = {
-    "carro": {
-        "nombre": "🚗 Carro RC Completo",
-        "precio": 25.0,
-        "foto": "https://drive.google.com/uc?export=download&id=ID_FOTO_CARRO_AQUI",
-        "descripcion": "📦 Incluye: 12 piezas STL\n🔧 Fácil de armar\n⚙️ Ruedas móviles\n🎮 Compatible con servos estándar",
-        "archivo_url": "https://drive.google.com/uc?export=download&id=ID_ZIP_CARRO_AQUI"
-    },
     "rueda": {
         "nombre": "🏍️ Rueda de Moto",
         "precio": 10.0,
@@ -59,15 +51,11 @@ async def start(update, context):
 async def catalogo(update, context):
     query = update.callback_query
     await query.answer()
-    
-    # Eliminar el mensaje del menú anterior
     await query.delete_message()
     
-    # Mostrar cada producto como un mensaje independiente
     for key, prod in PRODUCTOS.items():
         keyboard = [[InlineKeyboardButton(f"💰 COMPRAR - {prod['precio']} USDT", callback_data=f"comprar_{key}")]]
         
-        # Enviar mensaje con FOTO + DESCRIPCIÓN + BOTÓN
         await query.message.reply_photo(
             photo=prod["foto"],
             caption=f"*{prod['nombre']}*\n\n"
@@ -79,10 +67,9 @@ async def catalogo(update, context):
             parse_mode="Markdown"
         )
     
-    # Mensaje final
     await query.message.reply_text(
         "🛒 *Para comprar:*\n"
-        "1. Presiona COMPRAR en el producto que deseas\n"
+        "1. Presiona COMPRAR en el producto\n"
         "2. Completa el pago con Trust Wallet\n"
         "3. Presiona VERIFICAR PAGO\n"
         "4. Recibe tu archivo automáticamente",
@@ -100,21 +87,17 @@ async def comprar(update, context, product_key):
     prod = PRODUCTOS[product_key]
     order_id = f"{update.effective_user.id}_{int(time.time())}"
     
-    # Crear factura en CryptoCloud
     factura = crear_factura(prod["precio"], order_id)
     
     if not factura or not factura.get("result"):
         await query.edit_message_text(
             "❌ *Error al crear la factura*\n\n"
-            "Intenta de nuevo en unos segundos.\n"
-            "Si el problema persiste, contacta al administrador.",
+            "Intenta de nuevo en unos segundos.",
             parse_mode="Markdown"
         )
         return
     
-    # Guardar datos de la compra
     context.user_data["prod_key"] = product_key
-    context.user_data["pay_url"] = factura["result"]["pay_url"]
     
     keyboard = [
         [InlineKeyboardButton("💳 IR A PAGAR", url=factura["result"]["pay_url"])],
@@ -122,7 +105,6 @@ async def comprar(update, context, product_key):
         [InlineKeyboardButton("🔙 VOLVER AL CATÁLOGO", callback_data="catalogo")]
     ]
     
-    # Mostrar confirmación con el mismo producto
     await query.edit_message_caption(
         caption=f"*{prod['nombre']}*\n\n"
                 f"💰 *Monto a pagar:* {prod['precio']} USDT\n\n"
@@ -142,16 +124,12 @@ async def verificar(update, context):
     prod_key = context.user_data.get("prod_key")
     if not prod_key or prod_key not in PRODUCTOS:
         await query.edit_message_text(
-            "❌ *No hay una compra activa*\n\n"
-            "Usa /start para ver el catálogo.",
+            "❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.",
             parse_mode="Markdown"
         )
         return
     
     prod = PRODUCTOS[prod_key]
-    
-    # Mientras estés en modo prueba, siempre confirma
-    # Cuando salgas del modo prueba, aquí debes verificar con CryptoCloud
     
     keyboard = [[InlineKeyboardButton("📦 VER MÁS PRODUCTOS", callback_data="catalogo")]]
     
@@ -160,14 +138,12 @@ async def verificar(update, context):
                 f"✨ *{prod['nombre']}*\n\n"
                 f"📥 *Descarga tu archivo:*\n"
                 f"{prod['archivo_url']}\n\n"
-                f"🔧 ¡Gracias por tu compra!\n"
-                f"💬 ¿Preguntas? Contáctame.",
+                f"🔧 ¡Gracias por tu compra!",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
         disable_web_page_preview=True
     )
     
-    # Limpiar datos de la compra
     context.user_data.clear()
 
 # ========== SERVIDOR PARA RENDER ==========
@@ -199,7 +175,7 @@ def main():
         pattern="^comprar_"
     ))
     
-    print("🚀 Bot corriendo con catálogo visual...")
+    print("🚀 Bot corriendo - Rueda de Moto")
     app.run_polling()
 
 if __name__ == "__main__":
