@@ -15,7 +15,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 # ========== PRODUCTO ==========
 PRODUCTOS = {
     "carro": {
-        "nombre": "🚗 Hummer RC - Completo con Ensamble",
+        "nombre": "🚗 Hummer RC",
         "precio": 15.0,
         "fotos": [
             "https://drive.google.com/uc?export=download&id=1gKk_OOR2NRHgNMorcAa9Kf8BA7XXIINm",
@@ -23,13 +23,13 @@ PRODUCTOS = {
             "https://drive.google.com/uc?export=download&id=17VvvUeuyc8nn6wSRcjsYx3qGa3-djjMh",
             "https://drive.google.com/uc?export=download&id=12UF7SVcQuGDdz2Sp7RV58bMwW5ARwm0S"
         ],
-        "descripcion": "📦 CARROCERÍA + RUEDAS + ENSAMBLE COMPLETO\n\n"
-                       "✅ INCLUYE:\n"
-                       "• STL (para imprimir)\n"
+        "descripcion": "📦 Carrocería + Ruedas + Ensamble Completo\n\n"
+                       "✅ Incluye:\n"
+                       "• STL (para impresión 3D)\n"
                        "• STEP (para modificar en CAD)\n"
-                       "• SLDPRT (piezas en SolidWorks)\n"
-                       "• SLDASM (ensamble completo)\n\n"
-                       "🔥 TODO por solo 15 USD",
+                       "• SLDPRT (piezas SolidWorks)\n"
+                       "• SLDASM (ensamble SolidWorks)\n\n"
+                       "🔥 Todo por solo 15 USD",
         "archivo_url": "https://drive.google.com/uc?export=download&id=1UCpYCM4ueRSeSdEHYKnDKmWOewsKeqd6"
     }
 }
@@ -37,9 +37,9 @@ PRODUCTOS = {
 # ========== CRYPTOCLOUD ==========
 def crear_factura(amount, order_id):
     if not CRYPTOCLOUD_API_KEY:
-        return {"error": "Falta CRYPTOCLOUD_API_KEY en Render"}
+        return {"error": "Falta API Key"}
     if not CRYPTOCLOUD_SHOP_ID:
-        return {"error": "Falta CRYPTOCLOUD_SHOP_ID en Render"}
+        return {"error": "Falta Shop ID"}
     
     url = "https://api.cryptocloud.plus/v2/invoice/create"
     headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
@@ -69,14 +69,14 @@ Thread(target=run_webserver, daemon=True).start()
 async def start(update, context):
     foto_bienvenida = "https://drive.google.com/uc?export=download&id=1g4u0wM7nViiEl-RmyZvrYOfo6SxY9zoF"
     
-    keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
+    keyboard = [[InlineKeyboardButton("📦 Ver catálogo", callback_data="catalogo")]]
     
     await update.message.reply_photo(
         photo=foto_bienvenida,
-        caption="🔧 *MI TIENDA DE STL* 🔧\n\n"
-                "🚗 Diseños en SolidWorks para impresión 3D\n"
-                "💰 Pagos en USDT (Trust Wallet)\n"
-                "✅ Entrega automática\n\n"
+        caption="🔧 *Bienvenido a mi tienda* 🔧\n\n"
+                "Diseños en SolidWorks para impresión 3D.\n"
+                "Pagos en USDT (Trust Wallet).\n"
+                "Entrega automática.\n\n"
                 "👇 Presiona el botón para ver los productos:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
@@ -88,28 +88,27 @@ async def catalogo(update, context):
     
     prod = PRODUCTOS["carro"]
     
-    # Galería de fotos (carrusel)
+    # Galería de fotos
     media_group = []
     for i, foto_url in enumerate(prod["fotos"]):
         if i == 0:
             media_group.append(InputMediaPhoto(
                 media=foto_url,
                 caption=f"*{prod['nombre']}*\n\n"
-                       f"💰 *Precio:* {prod['precio']} USD\n\n"
+                       f"💰 Precio: {prod['precio']} USD\n\n"
                        f"{prod['descripcion']}\n\n"
-                       f"🔧 *Desliza para ver más fotos* 👉",
+                       f"🔧 Desliza para ver más fotos →",
                 parse_mode="Markdown"
             ))
         else:
             media_group.append(InputMediaPhoto(media=foto_url))
     
-    # Enviar galería (sin borrar el mensaje anterior)
     await query.message.reply_media_group(media=media_group)
     
     # Botón de compra
-    keyboard = [[InlineKeyboardButton(f"💰 COMPRAR - {prod['precio']} USD", callback_data="comprar")]]
+    keyboard = [[InlineKeyboardButton(f"💰 Comprar - {prod['precio']} USD", callback_data="comprar")]]
     await query.message.reply_text(
-        "👇 *Presiona el botón para comprar* 👇",
+        "👇 Presiona el botón para comprar 👇",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -121,51 +120,53 @@ async def comprar(update, context):
     prod = PRODUCTOS["carro"]
     
     # Mostrar mensaje de espera
-    await query.edit_message_text("⏳ *Creando factura, espera un momento...*", parse_mode="Markdown")
+    await query.edit_message_text("⏳ Creando orden, un momento...")
     
     order_id = f"{update.effective_user.id}_{int(time.time())}"
     respuesta = crear_factura(prod["precio"], order_id)
     
-    # Verificar errores de configuración
+    # Verificar errores
     if respuesta.get("error"):
         await query.edit_message_text(
-            f"❌ *Error de configuración:*\n`{respuesta['error']}`\n\n"
-            f"Contacta al administrador.",
+            f"❌ *Error temporal*\n\n{respuesta['error']}\n\nIntenta de nuevo.",
             parse_mode="Markdown"
         )
         return
     
-    # Verificar respuesta exitosa de CryptoCloud
+    # Verificar respuesta exitosa
     if respuesta.get("status") == "success" and respuesta.get("result", {}).get("link"):
         pay_url = respuesta["result"]["link"]
         
+        # Foto de pago
+        foto_pago = "https://drive.google.com/uc?export=download&id=1H4U6yimrJENjqwQ2lZWwU3h7JrvY1LG0"
+        
         keyboard = [
-            [InlineKeyboardButton("💳 PAGAR AHORA", url=pay_url)],
-            [InlineKeyboardButton("✅ YA PAGUÉ", callback_data="verificar")],
-            [InlineKeyboardButton("🔙 VER CATÁLOGO", callback_data="catalogo")]
+            [InlineKeyboardButton("💳 Ir a pagar", url=pay_url)],
+            [InlineKeyboardButton("✅ Ya pagué", callback_data="verificar")],
+            [InlineKeyboardButton("← Volver al catálogo", callback_data="catalogo")]
         ]
         
-        # Detectar si está en modo prueba
-        modo = "🔧 *MODO PRUEBA* (no se cobra realmente)" if respuesta["result"].get("test_mode") else "💰 *MODO REAL*"
-        
-        await query.edit_message_text(
-            f"✅ *Factura creada correctamente!*\n\n{modo}\n\n"
-            f"🛒 *{prod['nombre']}*\n"
-            f"💰 *Monto:* {prod['precio']} USD\n\n"
-            f"📝 *Instrucciones:*\n"
-            f"1️⃣ Presiona PAGAR AHORA\n"
-            f"2️⃣ Completa el pago con Trust Wallet\n"
-            f"3️⃣ Vuelve aquí y presiona YA PAGUÉ\n\n"
-            f"✅ Recibirás tu archivo automáticamente",
+        # Enviar imagen de pago + instrucciones
+        await query.message.reply_photo(
+            photo=foto_pago,
+            caption=f"✅ *Orden creada*\n\n"
+                    f"🛒 {prod['nombre']}\n"
+                    f"💰 Monto: {prod['precio']} USD\n\n"
+                    f"📝 *Sigue estos pasos:*\n"
+                    f"1. Presiona 'Ir a pagar'\n"
+                    f"2. Completa el pago con Trust Wallet\n"
+                    f"3. Vuelve y presiona 'Ya pagué'\n\n"
+                    f"🔧 Recibirás tu archivo al instante.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
-        # Guardar datos para verificación
+        # Eliminar mensaje anterior de "espera"
+        await query.delete_message()
+        # Guardar datos
         context.user_data["prod_key"] = "carro"
     else:
         await query.edit_message_text(
-            f"❌ *Respuesta inesperada de CryptoCloud*\n\n"
-            f"Intenta de nuevo más tarde.",
+            "❌ *Error al crear la orden*\n\nIntenta de nuevo en unos segundos.",
             parse_mode="Markdown"
         )
 
@@ -183,14 +184,14 @@ async def verificar(update, context):
     
     prod = PRODUCTOS[prod_key]
     
-    keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
+    keyboard = [[InlineKeyboardButton("📦 Ver catálogo", callback_data="catalogo")]]
     
     await query.edit_message_text(
-        f"🎉 *¡PAGO CONFIRMADO!* 🎉\n\n"
-        f"✨ *{prod['nombre']}*\n\n"
+        f"🎉 *¡Pago confirmado!* 🎉\n\n"
+        f"✨ {prod['nombre']}\n\n"
         f"📥 *Descarga tu archivo:*\n{prod['archivo_url']}\n\n"
         f"🔧 ¡Gracias por tu compra!\n\n"
-        f"📦 El archivo incluye: STL + STEP + SLDPRT + SLDASM",
+        f"📦 El paquete incluye: STL + STEP + SLDPRT + SLDASM",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
         disable_web_page_preview=True
@@ -201,7 +202,7 @@ async def verificar(update, context):
 # ========== MAIN ==========
 def main():
     if not BOT_TOKEN:
-        print("❌ ERROR: BOT_TOKEN no configurado en Render")
+        print("❌ ERROR: BOT_TOKEN no configurado")
         return
     
     app = Application.builder().token(BOT_TOKEN).build()
@@ -210,7 +211,7 @@ def main():
     app.add_handler(CallbackQueryHandler(comprar, pattern="^comprar$"))
     app.add_handler(CallbackQueryHandler(verificar, pattern="^verificar$"))
     
-    print("🚀 Bot corriendo con galería de fotos, CryptoCloud y foto de bienvenida...")
+    print("🚀 Bot funcionando en modo profesional")
     app.run_polling()
 
 if __name__ == "__main__":
