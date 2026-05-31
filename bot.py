@@ -104,10 +104,10 @@ async def catalogo(update, context):
     
     await query.message.reply_media_group(media=media_group)
     
-    # ✅ BOTÓN DE COMPRAR - AHORA CON TEXTO VISIBLE
+    # Botón de compra debajo de las fotos
     keyboard = [[InlineKeyboardButton(f"💰 Comprar - {prod['precio']} USD", callback_data="comprar")]]
     await query.message.reply_text(
-        text="👇 Presiona el botón para comprar",
+        "👇 Presiona para comprar",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -117,13 +117,18 @@ async def comprar(update, context):
     await query.answer()
     
     prod = PRODUCTOS["carro"]
+    
+    # Mensaje de espera
     await query.edit_message_text("⏳ Creando orden, un momento...")
     
     order_id = f"{update.effective_user.id}_{int(time.time())}"
     respuesta = crear_factura(prod["precio"], order_id)
     
     if respuesta.get("error"):
-        await query.edit_message_text(f"❌ *Error temporal*\n\n{respuesta['error']}\n\nIntenta de nuevo.", parse_mode="Markdown")
+        await query.edit_message_text(
+            f"❌ *Error temporal*\n\n{respuesta['error']}\n\nIntenta de nuevo.",
+            parse_mode="Markdown"
+        )
         return
     
     if respuesta.get("status") == "success" and respuesta.get("result", {}).get("link"):
@@ -136,6 +141,7 @@ async def comprar(update, context):
             [InlineKeyboardButton("← Volver al catálogo", callback_data="catalogo")]
         ]
         
+        # Mensaje con explicación de CryptoCloud
         await query.message.reply_photo(
             photo=foto_pago,
             caption=(
@@ -149,25 +155,17 @@ async def comprar(update, context):
                 f"4️⃣ Escanea el código QR o copia la dirección\n"
                 f"5️⃣ Envía el monto exacto de {prod['precio']} USD en USDT\n"
                 f"6️⃣ Vuelve aquí y presiona '✅ Ya pagué'\n\n"
-                f"🔒 *¿Qué es CryptoCloud y cómo protege tu pago?*\n\n"
-                f"CryptoCloud es una plataforma global de pagos que actúa como un **garante neutral** entre tú y yo.\n\n"
+                f"🔒 *¿Cómo funciona CryptoCloud?*\n\n"
+                f"CryptoCloud es un sistema de pagos que **retiene tu dinero** hasta que recibes el archivo.\n\n"
                 f"**Paso 1 - Retención segura**\n"
-                f"Cuando envías el pago, CryptoCloud lo recibe y **lo retiene automáticamente**. "
-                f"Ninguna de las dos partes puede tocar el dinero en este momento.\n\n"
-                f"**Paso 2 - Verificación automática**\n"
-                f"El sistema verifica la transacción en la blockchain (red TRC20). "
-                f"Este proceso toma solo unos segundos.\n\n"
-                f"**Paso 3 - Entrega garantizada**\n"
-                f"Una vez confirmado, CryptoCloud le avisa a nuestro bot: "
-                f"'Pago verificado, entrega el archivo'. Nuestro bot te da el enlace de descarga.\n\n"
-                f"**Paso 4 - Liberación del pago**\n"
-                f"Solo después de que recibes tu archivo, CryptoCloud libera el dinero en mi cuenta. "
-                f"**Si no recibes el archivo, el dinero no se libera.**\n\n"
-                f"✅ *Beneficios para ti:*\n"
-                f"• No necesitas registrarte en CryptoCloud\n"
-                f"• Tu pago está 100% respaldado\n"
-                f"• El sistema es automático, rápido y transparente\n"
-                f"• Miles de tiendas digitales confían en CryptoCloud\n\n"
+                f"Cuando pagas, CryptoCloud recibe y retiene el dinero. Nadie puede tocarlo.\n\n"
+                f"**Paso 2 - Verificación**\n"
+                f"El sistema verifica el pago en la blockchain (segundos).\n\n"
+                f"**Paso 3 - Entrega**\n"
+                f"Nuestro bot recibe la confirmación y te da el enlace de descarga.\n\n"
+                f"**Paso 4 - Liberación**\n"
+                f"Solo después de que recibes el archivo, CryptoCloud libera el pago.\n\n"
+                f"✅ *Beneficios:* Sin registro, 100% automático, respaldado.\n\n"
                 f"🔧 *Recibirás tu archivo al instante después de presionar 'Ya pagué'*"
             ),
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -176,7 +174,10 @@ async def comprar(update, context):
         await query.delete_message()
         context.user_data["prod_key"] = "carro"
     else:
-        await query.edit_message_text("❌ *Error al crear la orden*\n\nIntenta de nuevo en unos segundos.", parse_mode="Markdown")
+        await query.edit_message_text(
+            "❌ *Error al crear la orden*\n\nIntenta de nuevo en unos segundos.",
+            parse_mode="Markdown"
+        )
 
 async def verificar(update, context):
     query = update.callback_query
@@ -184,7 +185,10 @@ async def verificar(update, context):
     
     prod_key = context.user_data.get("prod_key")
     if not prod_key or prod_key not in PRODUCTOS:
-        await query.edit_message_text("❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.", parse_mode="Markdown")
+        await query.edit_message_text(
+            "❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.",
+            parse_mode="Markdown"
+        )
         return
     
     prod = PRODUCTOS[prod_key]
@@ -194,8 +198,8 @@ async def verificar(update, context):
         f"🎉 *¡Pago confirmado!* 🎉\n\n"
         f"✨ {prod['nombre']}\n\n"
         f"📥 *Descarga tu archivo:*\n{prod['archivo_url']}\n\n"
-        f"🔧 ¡Gracias por tu confianza!\n\n"
-        f"📦 El paquete incluye: STL + STEP + SLDPRT + SLDASM",
+        f"🔧 ¡Gracias por tu compra!\n\n"
+        f"📦 Incluye: STL + STEP + SLDPRT + SLDASM",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
         disable_web_page_preview=True
@@ -214,7 +218,7 @@ def main():
     app.add_handler(CallbackQueryHandler(comprar, pattern="^comprar$"))
     app.add_handler(CallbackQueryHandler(verificar, pattern="^verificar$"))
     
-    print("🚀 Bot funcionando en modo profesional")
+    print("🚀 Bot funcionando correctamente")
     app.run_polling()
 
 if __name__ == "__main__":
