@@ -14,7 +14,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 # ========== PRODUCTO: HUMMER RC ==========
 PRODUCTOS = {
-    "carro_hummer": {
+    "carro": {
         "nombre": "🚗 Hummer RC - Completo con Ensamble",
         "precio": 15.0,
         "fotos": [
@@ -68,7 +68,7 @@ async def catalogo(update, context):
     await query.answer()
     await query.delete_message()
     
-    prod = PRODUCTOS["carro_hummer"]
+    prod = PRODUCTOS["carro"]
     
     # Crear galería con las 4 fotos
     media_group = []
@@ -89,7 +89,7 @@ async def catalogo(update, context):
     await query.message.reply_media_group(media=media_group)
     
     # Enviar botón de compra
-    keyboard = [[InlineKeyboardButton(f"💰 COMPRAR - {prod['precio']} USD", callback_data="comprar_carro_hummer")]]
+    keyboard = [[InlineKeyboardButton(f"💰 COMPRAR - {prod['precio']} USD", callback_data="comprar_carro")]]
     await query.message.reply_text(
         "👇 *Presiona el botón para comprar* 👇",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -100,7 +100,7 @@ async def comprar(update, context):
     query = update.callback_query
     await query.answer()
     
-    prod = PRODUCTOS["carro_hummer"]
+    prod = PRODUCTOS["carro"]
     order_id = f"{update.effective_user.id}_{int(time.time())}"
     
     factura = crear_factura(prod["precio"], order_id)
@@ -113,7 +113,7 @@ async def comprar(update, context):
         )
         return
     
-    context.user_data["prod_key"] = "carro_hummer"
+    context.user_data["prod_key"] = "carro"
     
     keyboard = [
         [InlineKeyboardButton("💳 IR A PAGAR", url=factura["result"]["pay_url"])],
@@ -185,7 +185,7 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(catalogo, pattern="^catalogo$"))
-    app.add_handler(CallbackQueryHandler(comprar, pattern="comprar_carro_hummer"))
+    app.add_handler(CallbackQueryHandler(comprar, pattern="comprar_carro"))
     app.add_handler(CallbackQueryHandler(verificar, pattern="^verificar$"))
     
     print("🚀 Bot corriendo con galería de 4 fotos...")
