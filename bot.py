@@ -24,13 +24,13 @@ def run_webserver():
 
 Thread(target=run_webserver, daemon=True).start()
 
-# ========== FUNCIÓN CRYPTOCLOUD CON ERRORES VISIBLES ==========
+# ========== FUNCIÓN CRYPTOCLOUD ==========
 def crear_factura(amount, order_id):
-    # Verificar que las claves existen
+    # Primero, verificar que las claves existen
     if not CRYPTOCLOUD_API_KEY:
-        return {"error": "❌ Falta CRYPTOCLOUD_API_KEY en las variables de entorno de Render"}
+        return {"error": "Falta API_KEY"}
     if not CRYPTOCLOUD_SHOP_ID:
-        return {"error": "❌ Falta CRYPTOCLOUD_SHOP_ID en las variables de entorno de Render"}
+        return {"error": "Falta SHOP_ID"}
     
     url = "https://api.cryptocloud.plus/v2/invoice/create"
     headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
@@ -38,62 +38,51 @@ def crear_factura(amount, order_id):
     
     try:
         response = requests.post(url, json=data, headers=headers, timeout=30)
-        if response.status_code != 200:
-            return {"error": f"❌ HTTP {response.status_code}: {response.text[:200]}"}
         return response.json()
     except Exception as e:
-        return {"error": f"❌ Excepción: {str(e)}"}
+        return {"error": str(e)}
 
-# ========== CÓDIGO DEL BOT ==========
+# ========== BOT ==========
 async def start(update, context):
-    keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
-    await update.message.reply_text("🔧 *MI TIENDA DE STL* 🔧\n\n👇 Presiona el botón:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    # Botón único que dice COMPRAR
+    keyboard = [[InlineKeyboardButton("💰 COMPRAR - 15 USD", callback_data="comprar")]]
+    await update.message.reply_text(
+        "🚗 *Hummer RC*\n💰 Precio: 15 USD\n\nPresiona el botón para comprar:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
-async def manejar_botones(update, context):
+async def botones(update, context):
     query = update.callback_query
     await query.answer()
     
-    print(f"BOTÓN PRESIONADO: {query.data}")
+    print(f"📱 Botón presionado: {query.data}")  # Esto se ve en logs de Render
     
-    if query.data == "catalogo":
-        keyboard = [[InlineKeyboardButton("💰 COMPRAR - 15 USD", callback_data="comprar")]]
-        await query.edit_message_text(
-            "🚗 *Hummer RC*\n💰 Precio: 15 USD\n\n✅ Incluye: STL + STEP + SLDPRT + SLDASM",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-    elif query.data == "comprar":
-        # 👉 AHORA SÍ, INTENTAMOS CREAR LA FACTURA
+    if query.data == "comprar":
+        # Mostrar "Procesando..." mientras se crea la factura
+        await query.edit_message_text("⏳ Creando factura, espera...")
+        
         order_id = f"{update.effective_user.id}_{int(time.time())}"
         factura = crear_factura(15.0, order_id)
         
-        # Si hay error, mostrarlo al usuario
+        # Si hay error, mostrarlo
         if factura.get("error"):
-            await query.edit_message_text(
-                f"❌ *Error al crear la factura:*\n\n{factura['error']}\n\n"
-                f"Verifica que las variables de entorno en Render estén configuradas correctamente.",
-                parse_mode="Markdown"
-            )
+            await query.edit_message_text(f"❌ Error: {factura['error']}\n\nVerifica las variables en Render.")
             return
         
         # Si la factura se creó bien
-        if factura and factura.get("result"):
+        if factura.get("result") and factura["result"].get("pay_url"):
             pay_url = factura["result"]["pay_url"]
-            keyboard = [[InlineKeyboardButton("💳 IR A PAGAR", url=pay_url)]]
+            keyboard = [[InlineKeyboardButton("💳 PAGAR AHORA", url=pay_url)]]
             await query.edit_message_text(
-                f"🛒 *Hummer RC*\n💰 Monto: 15 USD\n\n"
-                f"✅ Presiona el botón para pagar con Trust Wallet\n\n"
-                f"Luego de pagar, presiona /pagado",
+                "✅ *Factura creada!*\n\nPresiona el botón para pagar con Trust Wallet:",
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="Markdown"
             )
         else:
-            await query.edit_message_text(
-                f"❌ *Respuesta inesperada de CryptoCloud*\n\n{factura}",
-                parse_mode="Markdown"
-            )
+            await query.edit_message_text(f"❌ Respuesta inesperada: {factura}")
     else:
-        await query.edit_message_text(f"No reconozco: {query.data}")
+        await query.edit_message_text(f"Botón no reconocido: {query.data}")
 
 def main():
     if not BOT_TOKEN:
@@ -102,9 +91,9 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(manejar_botones))
+    app.add_handler(CallbackQueryHandler(botones))  # Un solo handler para todo
     
-    print("🚀 Bot corriendo...")
+    print("🚀 Bot iniciado - Modo prueba definitivo")
     app.run_polling()
 
 if __name__ == "__main__":
