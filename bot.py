@@ -88,7 +88,6 @@ async def catalogo(update, context):
     
     prod = PRODUCTOS["carro"]
     
-    # Galería de fotos
     media_group = []
     for i, foto_url in enumerate(prod["fotos"]):
         if i == 0:
@@ -96,8 +95,7 @@ async def catalogo(update, context):
                 media=foto_url,
                 caption=f"*{prod['nombre']}*\n\n"
                        f"💰 Precio: {prod['precio']} USD\n\n"
-                       f"{prod['descripcion']}\n\n"
-                       f"🔧 Desliza para ver más fotos →",
+                       f"{prod['descripcion']}",
                 parse_mode="Markdown"
             ))
         else:
@@ -105,39 +103,25 @@ async def catalogo(update, context):
     
     await query.message.reply_media_group(media=media_group)
     
-    # Botón de compra
     keyboard = [[InlineKeyboardButton(f"💰 Comprar - {prod['precio']} USD", callback_data="comprar")]]
-    await query.message.reply_text(
-        "👇 Presiona el botón para comprar 👇",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
+    await query.message.reply_text(reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def comprar(update, context):
     query = update.callback_query
     await query.answer()
     
     prod = PRODUCTOS["carro"]
-    
-    # Mostrar mensaje de espera
     await query.edit_message_text("⏳ Creando orden, un momento...")
     
     order_id = f"{update.effective_user.id}_{int(time.time())}"
     respuesta = crear_factura(prod["precio"], order_id)
     
-    # Verificar errores
     if respuesta.get("error"):
-        await query.edit_message_text(
-            f"❌ *Error temporal*\n\n{respuesta['error']}\n\nIntenta de nuevo.",
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text(f"❌ *Error temporal*\n\n{respuesta['error']}\n\nIntenta de nuevo.", parse_mode="Markdown")
         return
     
-    # Verificar respuesta exitosa
     if respuesta.get("status") == "success" and respuesta.get("result", {}).get("link"):
         pay_url = respuesta["result"]["link"]
-        
-        # Foto de pago
         foto_pago = "https://drive.google.com/uc?export=download&id=1H4U6yimrJENjqwQ2lZWwU3h7JrvY1LG0"
         
         keyboard = [
@@ -146,29 +130,43 @@ async def comprar(update, context):
             [InlineKeyboardButton("← Volver al catálogo", callback_data="catalogo")]
         ]
         
-        # Enviar imagen de pago + instrucciones
+        # Mensaje largo descriptivo
         await query.message.reply_photo(
             photo=foto_pago,
-            caption=f"✅ *Orden creada*\n\n"
-                    f"🛒 {prod['nombre']}\n"
-                    f"💰 Monto: {prod['precio']} USD\n\n"
-                    f"📝 *Sigue estos pasos:*\n"
-                    f"1. Presiona 'Ir a pagar'\n"
-                    f"2. Completa el pago con Trust Wallet\n"
-                    f"3. Vuelve y presiona 'Ya pagué'\n\n"
-                    f"🔧 Recibirás tu archivo al instante.",
+            caption=(
+                f"✅ *Orden creada*\n\n"
+                f"🛒 {prod['nombre']}\n"
+                f"💰 Monto: {prod['precio']} USD\n\n"
+                f"📝 *Sigue estos pasos:*\n"
+                f"1. Presiona 'Ir a pagar'\n"
+                f"2. Completa el pago con Trust Wallet\n"
+                f"3. Vuelve y presiona 'Ya pagué'\n\n"
+                f"🔒 *¿Cómo funciona el pago?*\n\n"
+                f"Cuando pagas, el dinero no llega directamente a mí. Utilizamos **CryptoCloud**, "
+                f"una plataforma global que actúa como un puente seguro entre tú y yo.\n\n"
+                f"**¿Qué hace CryptoCloud?**\n"
+                f"• Genera una factura única para tu compra, con el monto exacto en USDT (red TRC20).\n"
+                f"• Recibe tu pago en el momento en que lo envías desde Trust Wallet.\n"
+                f"• **Retiene el dinero de forma segura** automáticamente. Nadie puede tocarlo todavía.\n"
+                f"• Espera la confirmación de la blockchain (solo segundos).\n"
+                f"• Avisa a nuestro bot: 'Pago confirmado, entrega el archivo'.\n\n"
+                f"**¿Por qué usamos CryptoCloud?**\n"
+                f"• **Escrow automático:** Retiene tu pago hasta que recibes tu archivo. "
+                f"Solo entonces se liberan los fondos. Esto protege tanto al comprador como al vendedor.\n"
+                f"• **Rápida:** El pago y la entrega ocurren en minutos.\n"
+                f"• **Confiable:** Utilizada por miles de tiendas digitales en todo el mundo.\n"
+                f"• **Sin registro:** No necesitas crearte una cuenta en CryptoCloud. Pagas con tu wallet y listo.\n\n"
+                f"🔧 *Recibirás tu archivo al instante después de confirmar el pago.*\n"
+                f"✅ La transacción es 100% automática y transparente.\n\n"
+                f"🔗 *Presiona 'Ir a pagar' para continuar con tu compra segura.*"
+            ),
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
-        # Eliminar mensaje anterior de "espera"
         await query.delete_message()
-        # Guardar datos
         context.user_data["prod_key"] = "carro"
     else:
-        await query.edit_message_text(
-            "❌ *Error al crear la orden*\n\nIntenta de nuevo en unos segundos.",
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text("❌ *Error al crear la orden*\n\nIntenta de nuevo en unos segundos.", parse_mode="Markdown")
 
 async def verificar(update, context):
     query = update.callback_query
@@ -176,27 +174,22 @@ async def verificar(update, context):
     
     prod_key = context.user_data.get("prod_key")
     if not prod_key or prod_key not in PRODUCTOS:
-        await query.edit_message_text(
-            "❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.",
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text("❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.", parse_mode="Markdown")
         return
     
     prod = PRODUCTOS[prod_key]
-    
     keyboard = [[InlineKeyboardButton("📦 Ver catálogo", callback_data="catalogo")]]
     
     await query.edit_message_text(
         f"🎉 *¡Pago confirmado!* 🎉\n\n"
         f"✨ {prod['nombre']}\n\n"
         f"📥 *Descarga tu archivo:*\n{prod['archivo_url']}\n\n"
-        f"🔧 ¡Gracias por tu compra!\n\n"
+        f"🔧 ¡Gracias por tu confianza!\n\n"
         f"📦 El paquete incluye: STL + STEP + SLDPRT + SLDASM",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
         disable_web_page_preview=True
     )
-    
     context.user_data.clear()
 
 # ========== MAIN ==========
