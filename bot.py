@@ -67,12 +67,10 @@ Thread(target=run_webserver, daemon=True).start()
 
 # ========== COMANDOS DEL BOT ==========
 async def start(update, context):
-    # Foto de bienvenida
     foto_bienvenida = "https://drive.google.com/uc?export=download&id=1g4u0wM7nViiEl-RmyZvrYOfo6SxY9zoF"
     
     keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
     
-    # Enviar foto con caption y botón
     await update.message.reply_photo(
         photo=foto_bienvenida,
         caption="🔧 *MI TIENDA DE STL* 🔧\n\n"
@@ -87,7 +85,6 @@ async def start(update, context):
 async def catalogo(update, context):
     query = update.callback_query
     await query.answer()
-    await query.delete_message()
     
     prod = PRODUCTOS["carro"]
     
@@ -106,6 +103,7 @@ async def catalogo(update, context):
         else:
             media_group.append(InputMediaPhoto(media=foto_url))
     
+    # Enviar galería (sin borrar el mensaje anterior)
     await query.message.reply_media_group(media=media_group)
     
     # Botón de compra
