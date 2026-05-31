@@ -67,13 +67,19 @@ Thread(target=run_webserver, daemon=True).start()
 
 # ========== COMANDOS DEL BOT ==========
 async def start(update, context):
+    # Foto de bienvenida
+    foto_bienvenida = "https://drive.google.com/uc?export=download&id=1g4u0wM7nViiEl-RmyZvrYOfo6SxY9zoF"
+    
     keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
-    await update.message.reply_text(
-        "🔧 *MI TIENDA DE STL* 🔧\n\n"
-        "🚗 Diseños en SolidWorks para impresión 3D\n"
-        "💰 Pagos en USDT (Trust Wallet)\n"
-        "✅ Entrega automática\n\n"
-        "👇 Presiona el botón para ver los productos:",
+    
+    # Enviar foto con caption y botón
+    await update.message.reply_photo(
+        photo=foto_bienvenida,
+        caption="🔧 *MI TIENDA DE STL* 🔧\n\n"
+                "🚗 Diseños en SolidWorks para impresión 3D\n"
+                "💰 Pagos en USDT (Trust Wallet)\n"
+                "✅ Entrega automática\n\n"
+                "👇 Presiona el botón para ver los productos:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -206,7 +212,7 @@ def main():
     app.add_handler(CallbackQueryHandler(comprar, pattern="^comprar$"))
     app.add_handler(CallbackQueryHandler(verificar, pattern="^verificar$"))
     
-    print("🚀 Bot corriendo con galería de fotos y CryptoCloud integrado...")
+    print("🚀 Bot corriendo con galería de fotos, CryptoCloud y foto de bienvenida...")
     app.run_polling()
 
 if __name__ == "__main__":
