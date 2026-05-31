@@ -6,26 +6,16 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
-# ========== VERIFICACIÓN DE VARIABLES AL INICIAR ==========
-print("🔍 INICIANDO BOT - VERIFICANDO CONFIGURACIÓN...")
-
+# ========== VARIABLES ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY")
 CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID")
-ADMIN_ID = os.getenv("ADMIN_ID")
-
-print(f"🔍 BOT_TOKEN: {'✅ OK' if BOT_TOKEN else '❌ FALTA'}")
-print(f"🔍 CRYPTOCLOUD_API_KEY: {'✅ OK' if CRYPTOCLOUD_API_KEY else '❌ FALTA'}")
-print(f"🔍 CRYPTOCLOUD_SHOP_ID: {'✅ OK' if CRYPTOCLOUD_SHOP_ID else '❌ FALTA'}")
-print(f"🔍 ADMIN_ID: {'✅ OK' if ADMIN_ID else '❌ FALTA'}")
-
-if not CRYPTOCLOUD_API_KEY or not CRYPTOCLOUD_SHOP_ID:
-    print("⚠️ ADVERTENCIA: CryptoCloud no configurado")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 # ========== PRODUCTO ==========
 PRODUCTOS = {
     "carro": {
-        "nombre": "🚗 Hummer RC",
+        "nombre": "🚗 Hummer RC - Completo con Ensamble",
         "precio": 15.0,
         "fotos": [
             "https://drive.google.com/uc?export=download&id=1gKk_OOR2NRHgNMorcAa9Kf8BA7XXIINm",
@@ -38,20 +28,26 @@ PRODUCTOS = {
     }
 }
 
+# ========== CRYPTOCLOUD CON IMPRESIÓN DE ERROR ==========
 def crear_factura(amount, order_id):
-    if not CRYPTOCLOUD_API_KEY or not CRYPTOCLOUD_SHOP_ID:
-        print("❌ No se puede crear factura: falta API Key o Shop ID")
-        return None
+    # Verificar que las claves existen
+    if not CRYPTOCLOUD_API_KEY:
+        return {"error": "Falta CRYPTOCLOUD_API_KEY en Render"}
+    if not CRYPTOCLOUD_SHOP_ID:
+        return {"error": "Falta CRYPTOCLOUD_SHOP_ID en Render"}
+    
     url = "https://api.cryptocloud.plus/v2/invoice/create"
     headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
     data = {"shop_id": CRYPTOCLOUD_SHOP_ID, "amount": amount, "order_id": order_id}
     try:
         response = requests.post(url, json=data, headers=headers, timeout=30)
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}: {response.text[:100]}"}
         return response.json()
     except Exception as e:
-        print(f"❌ Error: {e}")
-        return None
+        return {"error": str(e)}
 
+# ========== COMANDOS ==========
 async def start(update, context):
     keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
     await update.message.reply_text(
@@ -64,7 +60,9 @@ async def catalogo(update, context):
     query = update.callback_query
     await query.answer()
     await query.delete_message()
+    
     prod = PRODUCTOS["carro"]
+    
     media_group = []
     for i, foto_url in enumerate(prod["fotos"]):
         if i == 0:
@@ -75,34 +73,92 @@ async def catalogo(update, context):
             ))
         else:
             media_group.append(InputMediaPhoto(media=foto_url))
+    
     await query.message.reply_media_group(media=media_group)
+    
     keyboard = [[InlineKeyboardButton(f"💰 COMPRAR - {prod['precio']} USD", callback_data="comprar")]]
-    await query.message.reply_text("👇 COMPRAR 👇", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    await query.message.reply_text(
+        "👇 PRESIONA AQUÍ PARA COMPRAR 👇",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
 async def comprar(update, context):
     query = update.callback_query
     await query.answer()
+    
     prod = PRODUCTOS["carro"]
     order_id = f"{update.effective_user.id}_{int(time.time())}"
+    
     factura = crear_factura(prod["precio"], order_id)
-    if not factura or not factura.get("result"):
-        await query.edit_message_text("❌ Error al crear la factura. Verifica CryptoCloud.")
+    
+    # Si hay error, mostrarlo al usuario
+    if factura and factura.get("error"):
+        await query.edit_message_text(
+            f"❌ *Error de configuración:*\n`{factura['error']}`\n\n"
+            f"Por favor, contacta al administrador.",
+            parse_mode="Markdown"
+        )
         return
+    
+    if not factura or not factura.get("result"):
+        await query.edit_message_text(
+            "❌ *Error al crear la factura*\n\n"
+            "Respuesta inesperada de CryptoCloud. Intenta de nuevo.",
+            parse_mode="Markdown"
+        )
+        return
+    
     context.user_data["prod_key"] = "carro"
-    keyboard = [[InlineKeyboardButton("💳 PAGAR", url=factura["result"]["pay_url"])], [InlineKeyboardButton("✅ YA PAGUÉ", callback_data="verificar")]]
-    await query.edit_message_text(f"🛒 *{prod['nombre']}*\n💰 {prod['precio']} USD\n\n1️⃣ Paga\n2️⃣ Presiona YA PAGUÉ", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    
+    keyboard = [
+        [InlineKeyboardButton("💳 IR A PAGAR", url=factura["result"]["pay_url"])],
+        [InlineKeyboardButton("✅ YA PAGUÉ", callback_data="verificar")],
+        [InlineKeyboardButton("🔙 VER CATÁLOGO", callback_data="catalogo")]
+    ]
+    
+    await query.edit_message_text(
+        f"🛒 *{prod['nombre']}*\n\n"
+        f"💰 *Monto:* {prod['precio']} USD\n\n"
+        f"📝 *Instrucciones:*\n"
+        f"1️⃣ Presiona IR A PAGAR\n"
+        f"2️⃣ Completa el pago con Trust Wallet\n"
+        f"3️⃣ Vuelve aquí y presiona YA PAGUÉ\n\n"
+        f"✅ Recibirás tu archivo automáticamente",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
 async def verificar(update, context):
     query = update.callback_query
     await query.answer()
+    
     prod_key = context.user_data.get("prod_key")
-    if not prod_key:
-        await query.edit_message_text("❌ No hay compra activa.")
+    if not prod_key or prod_key not in PRODUCTOS:
+        await query.edit_message_text(
+            "❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.",
+            parse_mode="Markdown"
+        )
         return
+    
     prod = PRODUCTOS[prod_key]
-    await query.edit_message_text(f"🎉 *¡PAGO CONFIRMADO!*\n\n📥 {prod['archivo_url']}\n\n¡Gracias!", parse_mode="Markdown", disable_web_page_preview=True)
+    
+    keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
+    
+    await query.edit_message_text(
+        f"🎉 *¡PAGO CONFIRMADO!* 🎉\n\n"
+        f"✨ *{prod['nombre']}*\n\n"
+        f"📥 *Descarga tu archivo:*\n{prod['archivo_url']}\n\n"
+        f"🔧 ¡Gracias por tu compra!\n\n"
+        f"📦 Incluye: STL + STEP + SLDPRT + SLDASM",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
+    
     context.user_data.clear()
 
+# ========== SERVIDOR ==========
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -116,16 +172,19 @@ def run_webserver():
 
 Thread(target=run_webserver, daemon=True).start()
 
+# ========== MAIN ==========
 def main():
     if not BOT_TOKEN:
-        print("❌ ERROR: BOT_TOKEN no configurado")
+        print("❌ ERROR: BOT_TOKEN no configurado en Render")
         return
+    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(catalogo, pattern="catalogo"))
     app.add_handler(CallbackQueryHandler(comprar, pattern="comprar"))
     app.add_handler(CallbackQueryHandler(verificar, pattern="verificar"))
-    print("🚀 Bot corriendo")
+    
+    print("🚀 Bot corriendo...")
     app.run_polling()
 
 if __name__ == "__main__":
