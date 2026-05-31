@@ -88,6 +88,7 @@ async def catalogo(update, context):
     
     prod = PRODUCTOS["carro"]
     
+    # Galería de fotos
     media_group = []
     for i, foto_url in enumerate(prod["fotos"]):
         if i == 0:
@@ -103,8 +104,13 @@ async def catalogo(update, context):
     
     await query.message.reply_media_group(media=media_group)
     
+    # ✅ BOTÓN DE COMPRAR - AHORA CON TEXTO VISIBLE
     keyboard = [[InlineKeyboardButton(f"💰 Comprar - {prod['precio']} USD", callback_data="comprar")]]
-    await query.message.reply_text(reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.reply_text(
+        text="👇 Presiona el botón para comprar",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
 async def comprar(update, context):
     query = update.callback_query
