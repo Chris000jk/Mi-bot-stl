@@ -8,11 +8,9 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
 # ========== VARIABLES DE ENTORNO ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
+CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY")
+CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
-
-print(f"🔍 BOT_TOKEN: {'✅' if BOT_TOKEN else '❌'}")
-print(f"🔍 NOWPAYMENTS_API_KEY: {'✅' if NOWPAYMENTS_API_KEY else '❌'}")
 
 # ========== PRODUCTO ==========
 PRODUCTOS = {
@@ -36,41 +34,24 @@ PRODUCTOS = {
     }
 }
 
-# ========== NOWPAYMENTS ==========
-def crear_pago(amount, order_id):
-    if not NOWPAYMENTS_API_KEY:
-        return {"error": "Falta NOWPAYMENTS_API_KEY en Render"}
+# ========== CRYPTOCLOUD ==========
+def crear_factura(amount, order_id):
+    if not CRYPTOCLOUD_API_KEY:
+        return {"error": "Falta API Key"}
+    if not CRYPTOCLOUD_SHOP_ID:
+        return {"error": "Falta Shop ID"}
     
-    url = "https://api.nowpayments.io/v1/invoice"
-    headers = {
-        "x-api-key": NOWPAYMENTS_API_KEY,
-        "Content-Type": "application/json"
-    }
-    data = {
-        "price_amount": amount,
-        "price_currency": "USD",
-        "pay_currency": "USDT_TRC20",
-        "order_id": order_id,
-        "order_description": f"Compra Hummer RC - {order_id}",
-        "is_fixed_rate": True
-    }
-    
-    print(f"📡 Enviando a NOWPayments: {url}")
+    url = "https://api.cryptocloud.plus/v2/invoice/create"
+    headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
+    data = {"shop_id": CRYPTOCLOUD_SHOP_ID, "amount": amount, "order_id": order_id}
     
     try:
         response = requests.post(url, json=data, headers=headers, timeout=30)
-        print(f"📡 Status: {response.status_code}")
-        
-        if response.status_code == 201:
-            return response.json()
-        elif response.status_code == 401:
-            return {"error": "API Key inválida. Verifica en NOWPayments"}
-        else:
-            return {"error": f"HTTP {response.status_code}: {response.text[:200]}"}
+        return response.json()
     except Exception as e:
         return {"error": str(e)}
 
-# ========== SERVIDOR ==========
+# ========== SERVIDOR PARA RENDER ==========
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -84,7 +65,7 @@ def run_webserver():
 
 Thread(target=run_webserver, daemon=True).start()
 
-# ========== COMANDOS ==========
+# ========== COMANDOS DEL BOT ==========
 async def start(update, context):
     foto_bienvenida = "https://drive.google.com/uc?export=download&id=1g4u0wM7nViiEl-RmyZvrYOfo6SxY9zoF"
     
@@ -92,11 +73,11 @@ async def start(update, context):
     
     await update.message.reply_photo(
         photo=foto_bienvenida,
-        caption="🔧 *Mi tienda STL* 🔧\n\n"
+        caption="🔧 *Bienvenido a mi tienda* 🔧\n\n"
                 "Diseños en SolidWorks para impresión 3D.\n"
                 "Pagos en USDT (Trust Wallet).\n"
                 "Entrega automática.\n\n"
-                "👇 Presiona el botón:",
+                "👇 Presiona el botón para ver los productos:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -107,6 +88,7 @@ async def catalogo(update, context):
     
     prod = PRODUCTOS["carro"]
     
+    # Galería de fotos
     media_group = []
     for i, foto_url in enumerate(prod["fotos"]):
         if i == 0:
@@ -122,9 +104,9 @@ async def catalogo(update, context):
     
     await query.message.reply_media_group(media=media_group)
     
+    # Botón de compra (sin mensaje intermedio)
     keyboard = [[InlineKeyboardButton(f"💰 Comprar - {prod['precio']} USD", callback_data="comprar")]]
     await query.message.reply_text(
-        "👇 Presiona para comprar",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -134,21 +116,26 @@ async def comprar(update, context):
     await query.answer()
     
     prod = PRODUCTOS["carro"]
-    await query.edit_message_text("⏳ Creando orden...")
+    
+    # Mostrar mensaje de espera
+    await query.edit_message_text("⏳ Creando orden, un momento...")
     
     order_id = f"{update.effective_user.id}_{int(time.time())}"
-    respuesta = crear_pago(prod["precio"], order_id)
+    respuesta = crear_factura(prod["precio"], order_id)
     
+    # Verificar errores
     if respuesta.get("error"):
         await query.edit_message_text(
-            f"❌ *Error:*\n`{respuesta['error']}`\n\n"
-            f"NOWPAYMENTS_API_KEY: {'✅' if NOWPAYMENTS_API_KEY else '❌'}",
+            f"❌ *Error temporal*\n\n{respuesta['error']}\n\nIntenta de nuevo.",
             parse_mode="Markdown"
         )
         return
     
-    if respuesta.get("invoice_url"):
-        pay_url = respuesta["invoice_url"]
+    # Verificar respuesta exitosa
+    if respuesta.get("status") == "success" and respuesta.get("result", {}).get("link"):
+        pay_url = respuesta["result"]["link"]
+        
+        # Foto de pago
         foto_pago = "https://drive.google.com/uc?export=download&id=1H4U6yimrJENjqwQ2lZWwU3h7JrvY1LG0"
         
         keyboard = [
@@ -157,30 +144,32 @@ async def comprar(update, context):
             [InlineKeyboardButton("← Volver al catálogo", callback_data="catalogo")]
         ]
         
+        # Enviar imagen de pago + instrucciones
         await query.message.reply_photo(
             photo=foto_pago,
-            caption=(
-                f"✅ *Orden creada*\n\n"
-                f"🛒 {prod['nombre']}\n"
-                f"💰 Monto: {prod['precio']} USD\n\n"
-                f"📝 *Paso a paso:*\n"
-                f"1️⃣ Presiona 'Ir a pagar'\n"
-                f"2️⃣ Selecciona USDT red TRC20\n"
-                f"3️⃣ Paga con Trust Wallet\n"
-                f"4️⃣ Vuelve y presiona '✅ Ya pagué'\n\n"
-                f"🔒 *Pago seguro con NOWPayments*\n\n"
-                f"NOWPayments retiene tu pago hasta que recibes el archivo.\n"
-                f"Solo entonces se libera el dinero.\n\n"
-                f"✅ Sin registro, 100% automático.\n\n"
-                f"🔧 Recibirás tu archivo al instante después de presionar 'Ya pagué'"
-            ),
+            caption=f"✅ *Orden creada*\n\n"
+                    f"🛒 {prod['nombre']}\n"
+                    f"💰 Monto: {prod['precio']} USD\n\n"
+                    f"📝 *Sigue estos pasos:*\n"
+                    f"1. Presiona 'Ir a pagar'\n"
+                    f"2. Completa el pago con Trust Wallet\n"
+                    f"3. Vuelve y presiona 'Ya pagué'\n\n"
+                    f"🔒 *Pago seguro*\n"
+                    f"Las transacciones están protegidas por CryptoCloud, una plataforma global\n"
+                    f"utilizada por miles de comercios. Tu pago está completamente respaldado.\n\n"
+                    f"🔧 Recibirás tu archivo al instante después de confirmar el pago.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
+        # Eliminar mensaje anterior de "espera"
         await query.delete_message()
+        # Guardar datos
         context.user_data["prod_key"] = "carro"
     else:
-        await query.edit_message_text("❌ Error al crear la orden", parse_mode="Markdown")
+        await query.edit_message_text(
+            "❌ *Error al crear la orden*\n\nIntenta de nuevo en unos segundos.",
+            parse_mode="Markdown"
+        )
 
 async def verificar(update, context):
     query = update.callback_query
@@ -188,23 +177,30 @@ async def verificar(update, context):
     
     prod_key = context.user_data.get("prod_key")
     if not prod_key or prod_key not in PRODUCTOS:
-        await query.edit_message_text("❌ No hay compra activa", parse_mode="Markdown")
+        await query.edit_message_text(
+            "❌ *No hay una compra activa*\n\nUsa /start para ver el catálogo.",
+            parse_mode="Markdown"
+        )
         return
     
     prod = PRODUCTOS[prod_key]
+    
     keyboard = [[InlineKeyboardButton("📦 Ver catálogo", callback_data="catalogo")]]
     
     await query.edit_message_text(
-        f"🎉 *¡Pago confirmado!*\n\n"
+        f"🎉 *¡Pago confirmado!* 🎉\n\n"
         f"✨ {prod['nombre']}\n\n"
-        f"📥 *Descarga:*\n{prod['archivo_url']}\n\n"
-        f"🔧 ¡Gracias por tu compra!",
+        f"📥 *Descarga tu archivo:*\n{prod['archivo_url']}\n\n"
+        f"🔧 ¡Gracias por tu confianza!\n\n"
+        f"📦 El paquete incluye: STL + STEP + SLDPRT + SLDASM",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
         disable_web_page_preview=True
     )
+    
     context.user_data.clear()
 
+# ========== MAIN ==========
 def main():
     if not BOT_TOKEN:
         print("❌ ERROR: BOT_TOKEN no configurado")
@@ -212,11 +208,11 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(catalogo, pattern="catalogo"))
-    app.add_handler(CallbackQueryHandler(comprar, pattern="comprar"))
-    app.add_handler(CallbackQueryHandler(verificar, pattern="verificar"))
+    app.add_handler(CallbackQueryHandler(catalogo, pattern="^catalogo$"))
+    app.add_handler(CallbackQueryHandler(comprar, pattern="^comprar$"))
+    app.add_handler(CallbackQueryHandler(verificar, pattern="^verificar$"))
     
-    print("🚀 Bot funcionando con NOWPayments")
+    print("🚀 Bot funcionando en modo profesional")
     app.run_polling()
 
 if __name__ == "__main__":
