@@ -12,7 +12,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY")
 CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID")
 
-# Verificación al inicio
 print(f"🔍 API Key: {'✅ OK' if CRYPTOCLOUD_API_KEY else '❌ FALTA'}")
 print(f"🔍 Shop ID: {'✅ OK' if CRYPTOCLOUD_SHOP_ID else '❌ FALTA'}")
 
@@ -31,19 +30,22 @@ PRODUCTOS = {
     }
 }
 
-# ========== CRYPTOCLOUD CON MANEJO DE ERRORES ==========
+# ========== CRYPTOCLOUD CON URL CORRECTA ==========
 def crear_factura(amount, order_id):
     if not CRYPTOCLOUD_API_KEY:
-        return {"error": "Falta API Key en variables de entorno"}
+        return {"error": "Falta CRYPTOCLOUD_API_KEY"}
     if not CRYPTOCLOUD_SHOP_ID:
-        return {"error": "Falta Shop ID en variables de entorno"}
+        return {"error": "Falta CRYPTOCLOUD_SHOP_ID"}
     
-    # Usamos la versión v1 de la API que es más estable
-    url = "https://api.cryptocloud.plus/v1/invoice/create"
+    # URL correcta según documentación de CryptoCloud
+    url = "https://api.cryptocloud.plus/v2/invoice/create"
+    
     headers = {
         "Authorization": f"Token {CRYPTOCLOUD_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
+    
     data = {
         "shop_id": CRYPTOCLOUD_SHOP_ID,
         "amount": amount,
@@ -51,30 +53,48 @@ def crear_factura(amount, order_id):
         "currency": "USD"
     }
     
-    print(f"📡 Enviando a CryptoCloud: {url}")
-    print(f"📦 Datos: {data}")
+    print(f"📡 URL: {url}")
+    print(f"📡 Headers: Authorization=Token ***, Content-Type=application/json")
+    print(f"📡 Data: {data}")
     
     try:
-        response = requests.post(url, json=data, headers=headers, timeout=30)
-        print(f"📡 Respuesta HTTP: {response.status_code}")
-        print(f"📡 Texto respuesta: {response.text[:500]}")
+        response = requests.post(
+            url, 
+            json=data, 
+            headers=headers, 
+            timeout=30,
+            allow_redirects=True
+        )
         
-        # Verificar si la respuesta está vacía
+        print(f"📡 Status code: {response.status_code}")
+        print(f"📡 Response text: {response.text[:500]}")
+        
+        if response.status_code == 405:
+            return {"error": "Error 405: Método no permitido. La URL de la API puede ser incorrecta. Contacta con soporte de CryptoCloud."}
+        
+        if response.status_code == 401:
+            return {"error": "Error 401: API Key inválida. Verifica tu clave en CryptoCloud."}
+        
+        if response.status_code == 404:
+            return {"error": "Error 404: Endpoint no encontrado. Verifica la URL de la API."}
+        
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}: {response.text[:200]}"}
+        
         if not response.text or response.text.strip() == "":
-            return {"error": "Respuesta vacía de CryptoCloud. Verifica API Key y Shop ID."}
+            return {"error": "Respuesta vacía de CryptoCloud"}
         
-        # Intentar parsear JSON
         try:
             return response.json()
         except json.JSONDecodeError as e:
-            return {"error": f"Error al leer respuesta: {str(e)}. Respuesta: {response.text[:200]}"}
+            return {"error": f"Error JSON: {str(e)}. Respuesta: {response.text[:200]}"}
             
     except requests.exceptions.Timeout:
-        return {"error": "Tiempo de espera agotado. CryptoCloud no responde."}
+        return {"error": "Tiempo de espera agotado"}
     except requests.exceptions.ConnectionError:
-        return {"error": "Error de conexión. No se pudo contactar CryptoCloud."}
+        return {"error": "Error de conexión"}
     except Exception as e:
-        return {"error": f"Error inesperado: {str(e)}"}
+        return {"error": f"Error: {str(e)}"}
 
 # ========== SERVIDOR ==========
 class Handler(BaseHTTPRequestHandler):
@@ -94,7 +114,7 @@ Thread(target=run_webserver, daemon=True).start()
 async def start(update, context):
     keyboard = [[InlineKeyboardButton("📦 Ver catálogo", callback_data="catalogo")]]
     await update.message.reply_text(
-        "🔧 *Mi tienda STL* 🔧\n\nDiseños 3D en SolidWorks.\n👇 Presiona el botón:",
+        "🔧 *Mi tienda STL* 🔧\n\n👇 Presiona el botón:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -134,14 +154,13 @@ async def comprar(update, context):
     if respuesta.get("error"):
         await query.edit_message_text(
             f"❌ *Error:*\n`{respuesta['error']}`\n\n"
-            f"Verifica que en Render tengas configurado:\n"
+            f"Variables en Render:\n"
             f"CRYPTOCLOUD_API_KEY: {'✅' if CRYPTOCLOUD_API_KEY else '❌'}\n"
             f"CRYPTOCLOUD_SHOP_ID: {'✅' if CRYPTOCLOUD_SHOP_ID else '❌'}",
             parse_mode="Markdown"
         )
         return
     
-    # Para respuestas exitosas
     if respuesta.get("status") == "success" and respuesta.get("result", {}).get("pay_url"):
         pay_url = respuesta["result"]["pay_url"]
         keyboard = [[InlineKeyboardButton("💳 Ir a pagar", url=pay_url)]]
@@ -155,11 +174,6 @@ async def comprar(update, context):
     else:
         await query.edit_message_text(f"❌ Respuesta inesperada: {respuesta}", parse_mode="Markdown")
 
-async def verificar(update, context):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("✅ En modo prueba, el pago se confirma manualmente en CryptoCloud.")
-
 def main():
     if not BOT_TOKEN:
         print("❌ ERROR: BOT_TOKEN no configurado")
@@ -169,7 +183,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(catalogo, pattern="catalogo"))
     app.add_handler(CallbackQueryHandler(comprar, pattern="comprar"))
-    app.add_handler(CallbackQueryHandler(verificar, pattern="verificar"))
     
     print("🚀 Bot funcionando...")
     app.run_polling()
