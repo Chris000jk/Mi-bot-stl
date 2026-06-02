@@ -96,7 +96,8 @@ async def catalogo(update, context):
                 media=foto_url,
                 caption=f"*{prod['nombre']}*\n\n"
                        f"💰 Precio: {prod['precio']} USD\n\n"
-                       f"{prod['descripcion']}",
+                       f"{prod['descripcion']}\n\n"
+                       f"🔧 Desliza para ver más fotos →",
                 parse_mode="Markdown"
             ))
         else:
@@ -104,9 +105,10 @@ async def catalogo(update, context):
     
     await query.message.reply_media_group(media=media_group)
     
-    # Botón de compra (sin mensaje intermedio)
+    # Botón de compra
     keyboard = [[InlineKeyboardButton(f"💰 Comprar - {prod['precio']} USD", callback_data="comprar")]]
     await query.message.reply_text(
+        "👇 Presiona el botón para comprar 👇",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -154,10 +156,7 @@ async def comprar(update, context):
                     f"1. Presiona 'Ir a pagar'\n"
                     f"2. Completa el pago con Trust Wallet\n"
                     f"3. Vuelve y presiona 'Ya pagué'\n\n"
-                    f"🔒 *Pago seguro*\n"
-                    f"Las transacciones están protegidas por CryptoCloud, una plataforma global\n"
-                    f"utilizada por miles de comercios. Tu pago está completamente respaldado.\n\n"
-                    f"🔧 Recibirás tu archivo al instante después de confirmar el pago.",
+                    f"🔧 Recibirás tu archivo al instante.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
@@ -191,7 +190,7 @@ async def verificar(update, context):
         f"🎉 *¡Pago confirmado!* 🎉\n\n"
         f"✨ {prod['nombre']}\n\n"
         f"📥 *Descarga tu archivo:*\n{prod['archivo_url']}\n\n"
-        f"🔧 ¡Gracias por tu confianza!\n\n"
+        f"🔧 ¡Gracias por tu compra!\n\n"
         f"📦 El paquete incluye: STL + STEP + SLDPRT + SLDASM",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
