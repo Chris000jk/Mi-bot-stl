@@ -99,9 +99,11 @@ async def start(update, context):
     
     keyboard = [[InlineKeyboardButton("📦 VER CATÁLOGO", callback_data="catalogo")]]
     
+    # MENSAJE MODIFICADO PARA VERIFICAR QUE EL CÓDIGO NUEVO ESTÁ CORRIENDO
     await update.message.reply_photo(
         photo=foto_bienvenida,
-        caption="🔧 *MI TIENDA DE STL* 🔧\n\n"
+        caption="🔧 *MI TIENDA DE STL - VERSIÓN 2.0* 🔧\n\n"
+                "✅ *PASARELA PROPIA ACTIVA* ✅\n\n"
                 "🚗 Diseños en SolidWorks para impresión 3D\n"
                 "💰 Pagos en USDT (Trust Wallet)\n"
                 "✅ Entrega automática\n\n"
